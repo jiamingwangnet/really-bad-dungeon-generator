@@ -1,7 +1,3 @@
-/*
- TODO:
- Add room and corridor collision
-*/
 const fs = require('fs');
 
 exports.DGenerator = class {
