@@ -7,7 +7,8 @@ exports.game = {
         }
         for (let i = 0; i < n; i++) {
             exports.game.seed = (a * exports.game.seed + b) % m
-            results.push(exports.game.seed/m)
+
+            results.push(exports.game.seed/m);
         }
         return results;
     }
