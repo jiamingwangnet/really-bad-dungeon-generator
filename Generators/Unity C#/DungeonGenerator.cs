@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System;
 using UnityEngine;
+using System.Linq;
 using Random = UnityEngine.Random;
 
 [CreateAssetMenu(fileName = "Dungeon", menuName = "DungeonGenerator", order = 1)]
@@ -18,6 +19,7 @@ public class DungeonGenerator : ScriptableObject
     [Space(10)]
     public int maxCorridorLength = 7;
     public int minCorridorLength = 2;
+    public int corridorWidth = 2;
     [Space(10)]
     public int repeats = 20;
     public float offsetChance = 0.15f;
@@ -25,6 +27,15 @@ public class DungeonGenerator : ScriptableObject
     public int finishes = 5;
     [Space(10)]
     public int seed = 25234;
+    public int OriginalSeed
+    {
+        get
+        {
+            return seed - iteration;
+        }
+    }
+    [Space(10)]
+    public int iteration = 0;
 
     int[][] dungeon;
 
@@ -59,19 +70,17 @@ public class DungeonGenerator : ScriptableObject
         public bool isSpawnRoom;
         public List<Carver> nexts = new List<Carver>();
 
-        public Carver(int xVal, int yVal, int widthVal, int heightVal, DungeonGenerator Dgenerator, float specialDensityVal = 0.1f)
+        public Carver(int x, int y, int width, int height, DungeonGenerator Dgenerator, float specialDensityVal = 0.1f)
         {
-            x = xVal;
-            y = yVal;
-            width = widthVal;
-            height = heightVal;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
             generator = Dgenerator;
             specialDensity = specialDensityVal == 0 ? float.NaN : specialDensityVal;
             isSpawnRoom = false;
-            takenSide = null;
-            facing = null;
 
-            center = new Vector2Int((int) Math.Round((double) width / 2, MidpointRounding.AwayFromZero) + x, (int)Math.Round((double)height / 2, MidpointRounding.AwayFromZero) + y);
+            center = new Vector2Int((int) Math.Round((double) this.width / 2, MidpointRounding.AwayFromZero) + x, (int)Math.Round((double)this.height / 2, MidpointRounding.AwayFromZero) + y);
         }
 
         public bool Collided(Carver room)
@@ -84,23 +93,25 @@ public class DungeonGenerator : ScriptableObject
 
         public void Construct(int[][] dungeon)
         {
-            for(int startY = y; startY < height + y; startY++)
+            int y = this.y, x = this.x;
+
+            for (int i = 0; i < height * width; i++)
             {
-                for(int startX = x; startX < width + x; startX++)
+                if (i % width == 0)
                 {
-                    if(Mathf.Floor(Random.Range(0f, 0.999999f) / specialDensity) == 0)
-                    {
-                        dungeon[startY][startX] = (int)CellValue.special;
-                    } else
-                    {
-                        dungeon[startY][startX] = (int)CellValue.empty;
-                    }
+                    y++;
+                    x = this.x;
                 }
+
+                if (Mathf.Floor(Random.Range(0f, 0.999999f) / specialDensity) == 0)
+                    dungeon[y][x] = (int)CellValue.special;
+                else
+                    dungeon[y][x] = (int)CellValue.empty;
+
+                x++;
             }
-            if (isSpawnRoom)
-            {
-                dungeon[center.y][center.x] = (int)CellValue.spawn;
-            }
+
+            if (isSpawnRoom) dungeon[center.y][center.x] = (int)CellValue.spawn;
         }
     }
 
@@ -151,58 +162,34 @@ public class DungeonGenerator : ScriptableObject
                 {
                     if (currentRoom.takenSide == side) continue;
 
-                    int width = 0, height = 0, x = 0, y = 0, facing = 0;
+                    int width = corridorWidth, height = corridorWidth, x = 0, y = 0;
 
-                    switch (side)
+                    if (side == (int)SideNumber.top || side == (int)SideNumber.down)
                     {
-                        case (int)SideNumber.top:
-                            width = 2;
-                            height = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxCorridorLength - minCorridorLength + 1)) + minCorridorLength;
-                            x = currentRoom.center.x;
+                        height = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxCorridorLength - minCorridorLength + 1)) + minCorridorLength;
+                        x = currentRoom.center.x;
+                        
+                        if (side == (int)SideNumber.top)
                             y = currentRoom.y - height;
-                            facing = (int)SideNumber.top;
-                            break;
-
-                        case (int)SideNumber.down:
-                            width = 2;
-                            height = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxCorridorLength - minCorridorLength + 1)) + minCorridorLength;
-                            x = currentRoom.center.x;
+                        else
                             y = currentRoom.y + currentRoom.height;
-                            facing = (int)SideNumber.down;
-                            break;
+                    }
+                    else
+                    {
+                        width = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxCorridorLength - minCorridorLength + 1)) + minCorridorLength;
+                        y = currentRoom.center.y;
 
-                        case (int)SideNumber.right:
-                            width = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxCorridorLength - minCorridorLength + 1)) + minCorridorLength;
-                            height = 2;
+                        if (side == (int)SideNumber.right)
                             x = currentRoom.x + currentRoom.width;
-                            y = currentRoom.center.y;
-                            facing = (int)SideNumber.right;
-                            break;
-
-                        case (int)SideNumber.left:
-                            width = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxCorridorLength - minCorridorLength + 1)) + minCorridorLength;
-                            height = 2;
+                        else
                             x = currentRoom.x - width;
-                            y = currentRoom.center.y;
-                            facing = (int)SideNumber.left;
-                            break;
                     }
 
-                    bool skip = false;
+                    if (x + width >= Dwidth || x <= 0 ||
+                        y + height >= Dheight || y <= 0) continue;
 
-                    if (x + width >= Dwidth || x <= 0)
-                    {
-                        skip = true;
-                    }
-
-                    if (y + height >= Dheight || y <= 0)
-                    {
-                        skip = true;
-                    }
-
-                    if (skip) continue;
                     Carver corridor = new Carver(x, y, width, height, this, 0);
-                    corridor.facing = facing;
+                    corridor.facing = side;
                     currentRoom.nexts.Add(corridor);
 
                     pendingCorridors.Add(corridor);
@@ -216,36 +203,36 @@ public class DungeonGenerator : ScriptableObject
             #region room generation
             foreach(Carver corridor in pendingCorridors)
             {
-                int x = 0, y = 0,
+                int offset = Mathf.FloorToInt(Random.Range(0f, 0.999999f) / offsetChance) == 0 ? Mathf.FloorToInt(Random.Range(0f, 0.999999f) * 3) - 1 : 0;
+
+                int x = offset, y = offset,
                     width = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxRoomWidth - minRoomWidth + 1)) + minRoomWidth,
                     height = Mathf.FloorToInt(Random.Range(0f, 0.999999f) * (maxRoomHeight - minRoomHeight + 1)) + minRoomHeight,
                     takenSide = 0;
 
-                int offset = Mathf.FloorToInt(Random.Range(0f, 0.999999f) / offsetChance) == 0 ? Mathf.FloorToInt(Random.Range(0f, 0.999999f) * 3) - 1 : 0;
-
                 switch (corridor.facing)
                 {
                     case (int)SideNumber.down:
-                        x = corridor.x - (int)Math.Round((double)width / 2, MidpointRounding.AwayFromZero) + offset;
+                        x += corridor.x - (int)Math.Round((double)width / 2, MidpointRounding.AwayFromZero);
                         y = corridor.y + corridor.height;
                         takenSide = (int)SideNumber.top;
                         break;
 
                     case (int)SideNumber.top:
-                        x = corridor.x - (int)Math.Round((double)width / 2, MidpointRounding.AwayFromZero) + offset;
+                        x += corridor.x - (int)Math.Round((double)width / 2, MidpointRounding.AwayFromZero);
                         y = corridor.y - height;
                         takenSide = (int)SideNumber.down;
                         break;
 
                     case (int)SideNumber.left:
                         x = corridor.x - width;
-                        y = corridor.y - (int)Math.Round((double)height / 2, MidpointRounding.AwayFromZero) + offset;
+                        y += corridor.y - (int)Math.Round((double)height / 2, MidpointRounding.AwayFromZero);
                         takenSide = (int)SideNumber.right;
                         break;
 
                     case (int)SideNumber.right:
                         x = corridor.x + corridor.width;
-                        y = corridor.y - (int)Math.Round((double)height / 2, MidpointRounding.AwayFromZero) + offset;
+                        y += corridor.y - (int)Math.Round((double)height / 2, MidpointRounding.AwayFromZero);
                         takenSide = (int)SideNumber.left;
                         break;
                 }
@@ -263,12 +250,6 @@ public class DungeonGenerator : ScriptableObject
                     }
                 }
 
-                if (x + width >= Dwidth || x <= 0 ||
-                   y + height >= Dheight || y <= 0)
-                {
-                    skip = true;
-                }
-
                 foreach (Carver pendRoom in pendingRooms)
                 {
                     if (newRoom.Collided(pendRoom))
@@ -277,11 +258,18 @@ public class DungeonGenerator : ScriptableObject
                     }
                 }
 
+                if (x + width >= Dwidth || x <= 0 ||
+                   y + height >= Dheight || y <= 0)
+                {
+                    skip = true;
+                }
+
                 if (skip)
                 {
                     lastRoom.nexts.Remove(corridor);
                     continue;
                 }
+
                 pendingRooms.Add(newRoom);
                 corridor.nexts.Add(newRoom);
 
@@ -291,25 +279,14 @@ public class DungeonGenerator : ScriptableObject
             #endregion
         }
 
-        if(pendingCorridors.Count != 0)
-        {
-            foreach(Carver pendCorridor in pendingCorridors)
-            {
-                corridors.Add(pendCorridor);
-            }
-        }
-
-        if (pendingRooms.Count != 0)
-        {
-            foreach (Carver pendRoom in pendingRooms)
-            {
-                corridors.Add(pendRoom);
-            }
-        }
-
         foreach(Carver currRoom in rooms)
         {
             currRoom.Construct(dungeon);
+        }
+
+        foreach (Carver corridor in corridors)
+        {
+            corridor.Construct(dungeon);
         }
 
         int counter = 0;
@@ -329,11 +306,6 @@ public class DungeonGenerator : ScriptableObject
             {
                 break;
             }
-        }
-
-        foreach (Carver corridor in corridors)
-        {
-            corridor.Construct(dungeon);
         }
         return dungeon;
     }

@@ -1,3 +1,8 @@
+/*
+This one doesn't work
+Dont use it
+*/
+
 class Generator {
     constructor(game, seed, sizeX, sizeY, heightMin, heightMax, widthMin, widthMax, maxRoom, oneInChance) {
         this.game = game;
