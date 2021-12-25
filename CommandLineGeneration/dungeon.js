@@ -3,22 +3,25 @@ const gen = require('../Generators/generator02');
 
 console.time("generate");
 let generator = new gen.DGenerator(game.game,
-    { //dungeon settings
+    { // dungeon settings
         width: 80,
         height: 80,
-        offsetChance: 0.15,
+        offsetChance: 0.25,
+        specialDensity: 0.25,
+        finishes: 5,
         roomSizes: {
-            MaxRoomWidth: 8,
-            MinRoomWidth: 4,
-            MaxRoomHeight: 8,
-            MinRoomHeight: 4
+            MaxRoomWidth: 10,
+            MinRoomWidth: 5,
+            MaxRoomHeight: 10,
+            MinRoomHeight: 5
         },
         corridorSizes: {
-            MaxLength: 7,
-            MinLength: 2,
+            MaxLength: 8,
+            MinLength: 3,
+            width: 2
         },
-        repeats: 30, //how many times will the generator generate the rooms
-        seed: 7654321
+        repeats: 45, //how many times will the generator generate the rooms
+        seed: 234524351
     }
     );
 generator.init();

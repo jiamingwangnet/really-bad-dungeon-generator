@@ -10,6 +10,8 @@ exports.DGenerator = class {
             width: 150,
             height: 150,
             offsetChance: 0.15,
+            specialDensity: 0.107,
+            finishes: 5,
             roomSizes: {
                 MaxRoomWidth: 8,
                 MinRoomWidth: 4,
@@ -19,6 +21,7 @@ exports.DGenerator = class {
             corridorSizes: {
                 MaxLength: 7,
                 MinLength: 2,
+                width: 2
             },
             repeats: 30, //how many times will the generator generate the rooms
             seed: 25234
@@ -56,15 +59,13 @@ exports.DGenerator = class {
                 this.width = width;
                 this.height = height;
                 this.specialDensity = specialDensity == 0 ? NaN : specialDensity;
+                this.isSpawnRoom = false;
+                this.nexts = []; // defines what branches out from this room/corridor
 
                 this.generator = generator; // a reference to the generator is needed to access the outer scope
-            }
-
-            // propeties are defined here if they cannot be defined in the constructor
-            init() {
                 this.center = {
-                    x: Math.round((this.width) / 2) + this.x,
-                    y: Math.round((this.height) / 2) + this.y
+                    x: Math.round((width) / 2) + x,
+                    y: Math.round((height) / 2) + y
                 }
             }
 
@@ -76,15 +77,24 @@ exports.DGenerator = class {
             }
 
             construct(dungeon) { //constructs the room by converting the data into numbers
-                for (let startY = this.y; startY < this.height + this.y; startY++) {
-                    for (let startX = this.x; startX < this.width + this.x; startX++) {
-                        if (Math.floor(this.generator.game.Random()[0] / this.specialDensity) == 0) {
-                            dungeon[startY][startX] = this.generator.cellValue.special;
-                        } else {
-                            dungeon[startY][startX] = this.generator.cellValue.empty;
-                        }
+                let y = this.y, x = this.x;
+
+                for (let i = 0; i < this.height * this.width; i++) {
+                    if (i % this.width == 0) {
+                        y++;
+                        x = this.x;
                     }
+
+                    if (Math.floor(this.generator.game.Random()[0] / this.specialDensity) == 0)
+                        dungeon[y][x] = this.generator.cellValue.special;
+                    else
+                        dungeon[y][x] = this.generator.cellValue.empty;
+
+
+                    x++;
                 }
+
+                if (this.isSpawnRoom) dungeon[this.center.y][this.center.x] = this.generator.cellValue.spawn;
             }
         }
     }
@@ -134,85 +144,62 @@ exports.DGenerator = class {
             + this.settings.roomSizes.MinRoomHeight, // randomises the room height
             this
         );
-        room.init();
-
-        room.takenSide = null;
+        room.isSpawnRoom = true;
 
         pendingRooms.push(room);
 
         for (let i = 0, len = this.settings.repeats; i < len; ++i) {
+            let lastRoom = room;
+
             //#region corridor generation
             //extend corridors from each free side of the pending rooms by looping though them
             for (let i = 0, len = pendingRooms.length; i < len; ++i) {
                 let currentRoom = pendingRooms[i];
 
-                for (let j = 0; j < 4; j++) { //loops for each side
+                for (let side = 0; side < 4; side++) { //loops for each side
                     // if the side if taken, continue
-                    if (currentRoom.takenSide == j) { //since the room side is defined by a number the iterator j can be used to check the sides
-                        continue;
-                    }
+                    if (currentRoom.takenSide == side) continue; //since the room side is defined by a number the iterator j can be used to check the sides
 
                     // create corridor
                     // the switch determines which side to do and the corridor size
-                    let width, height, x, y, facing;
+                    let width = this.settings.corridorSizes.width, height = this.settings.corridorSizes.width, x = 0, y = 0;
 
-                    switch (j) {
-                        case this.sideNumber.top: //top
-                            width = 1;
-                            height = Math.floor(this.game.Random()[0] * (this.settings.corridorSizes.MaxLength - this.settings.corridorSizes.MinLength + 1))
-                                + this.settings.corridorSizes.MinLength; //random height up
-                            x = currentRoom.center.x; //set the x to the room's x center
-                            y = currentRoom.y - height; //the y has to be {height} amount up from the room's y
-                            facing = this.sideNumber.top;
-                            break;
+                    if (side == this.sideNumber.top || side == this.sideNumber.down) {
+                        // the height and x for top and down facing corridors are the same
+                        height = Math.floor(this.game.Random()[0] * (this.settings.corridorSizes.MaxLength - this.settings.corridorSizes.MinLength + 1))
+                            + this.settings.corridorSizes.MinLength; //random height up
+                        x = currentRoom.center.x; // set the x to the room's x center
 
-                        case this.sideNumber.down:  //down
-                            width = 1;
-                            height = (Math.floor(this.game.Random()[0] * (this.settings.corridorSizes.MaxLength - this.settings.corridorSizes.MinLength + 1))
-                                + this.settings.corridorSizes.MinLength); //random height down
-                            x = currentRoom.center.x;
+                        if (side == this.sideNumber.top) // y for the top facing
+                            y = currentRoom.y - height; // the y has to be height amount up from the room's y
+                        else // y for the down facing
                             y = currentRoom.y + currentRoom.height;
-                            facing = this.sideNumber.down;
-                            break;
 
-                        case this.sideNumber.right: //right
-                            width = (Math.floor(this.game.Random()[0] * (this.settings.corridorSizes.MaxLength - this.settings.corridorSizes.MinLength + 1))
-                                + this.settings.corridorSizes.MinLength); //random width right
-                            height = 1;
+                    } else { // does the same for right and left facing corridors
+                        // the width and y for the left and right facing corridors are the same
+                        width = (Math.floor(this.game.Random()[0] * (this.settings.corridorSizes.MaxLength - this.settings.corridorSizes.MinLength + 1))
+                            + this.settings.corridorSizes.MinLength); //random width right
+                        y = currentRoom.center.y;
+
+                        if (side == this.sideNumber.right) // x for the right facing
                             x = currentRoom.x + currentRoom.width;
-                            y = currentRoom.center.y;
-                            facing = this.sideNumber.right;
-                            break;
-
-                        case this.sideNumber.left: //left
-                            width = ((Math.floor(this.game.Random()[0] * (this.settings.corridorSizes.MaxLength - this.settings.corridorSizes.MinLength + 1))
-                                + this.settings.corridorSizes.MinLength)); //random width left
-                            height = 1;
+                        else // x for the left facing
                             x = currentRoom.x - width;
-                            y = currentRoom.center.y;
-                            facing = this.sideNumber.left;
-                            break;
                     }
 
-                    let skip = false;
+                    if (x + width >= this.settings.width || x <= 0 ||
+                        y + height >= this.settings.height || y <= 0)  // checks if the corridor goes over the width and height limit, if it does, skip
+                        continue;
 
-                    if (x + width >= this.settings.width || x <= 0) { // checks if the corridor goes over the width limit, if it does, skip
-                        skip = true;
-                    }
-
-                    if (y + height >= this.settings.height || y <= 0) { // does the same thing but for the height
-                        skip = true;
-                    }
-
-                    if (skip) continue;
                     let corridor = new this.Carver(x, y, width, height, this, 0);
-                    corridor.init();
-                    corridor.facing = facing;
+                    corridor.facing = side;
+                    currentRoom.nexts.push(corridor); // add this corridor to the current room's connectons
 
                     pendingCorridors.push(corridor); //adds corridor to the pending array
                 }
                 // push the current room into the rooms array
                 rooms.push(currentRoom);
+                lastRoom = currentRoom; // sets the last room to the current room
             }
             pendingRooms = [];
             //#endregion
@@ -222,44 +209,44 @@ exports.DGenerator = class {
 
             for (let i = 0, len = pendingCorridors.length; i < len; ++i) {
                 let corridor = pendingCorridors[i];
-                const maxW = this.settings.roomSizes.MaxRoomWidth,
+                const maxW = this.settings.roomSizes.MaxRoomWidth, // makes writing the random shorter
                     minW = this.settings.roomSizes.MinRoomWidth,
                     maxH = this.settings.roomSizes.MaxRoomHeight,
                     minH = this.settings.roomSizes.MinRoomHeight;
-                let x, y,
-                    width = Math.floor(this.game.Random()[0] * (maxW - minW + 1)) + minW,
-                    height = Math.floor(this.game.Random()[0] * (maxH - minH + 1)) + minH,
-                    takenSide;
 
                 let offset = Math.floor(this.game.Random()[0] / this.settings.offsetChance) == 0 ? Math.floor(this.game.Random()[0] * 3) - 1 : 0;
+
+                let x = offset, y = offset,
+                    width = Math.floor(this.game.Random()[0] * (maxW - minW + 1)) + minW,
+                    height = Math.floor(this.game.Random()[0] * (maxH - minH + 1)) + minH,
+                    takenSide = 0;
 
                 // placement calculation
                 switch (corridor.facing) {
                     case this.sideNumber.down:
-                        x = corridor.x - Math.round(width / 2) + offset; //set x to corridor.x and move it back width/2 so its in the middle
+                        x += corridor.x - Math.round(width / 2); //set x to corridor.x and move it back width/2 so its in the middle
                         y = corridor.y + corridor.height; // set y to the bottom of the corridor
                         takenSide = this.sideNumber.top;
                         break;
 
                     case this.sideNumber.top:
-                        x = corridor.x - Math.round(width / 2) + offset;
+                        x += corridor.x - Math.round(width / 2);
                         y = corridor.y - height; // set y to corridor.y minus the height so it sits on top of the 
                         takenSide = this.sideNumber.down;
                         break;
                     case this.sideNumber.left:
                         x = corridor.x - width; // set x to corridor x and set it back width so it isn't inside the corridor
-                        y = corridor.y - Math.round(height / 2) + offset;
+                        y += corridor.y - Math.round(height / 2);
                         takenSide = this.sideNumber.right;
                         break;
                     case this.sideNumber.right:
                         x = corridor.x + corridor.width; // set x to corridor x and set it back width so it isn't inside the corridor
-                        y = corridor.y - Math.round(height / 2) + offset;
+                        y += corridor.y - Math.round(height / 2);
                         takenSide = this.sideNumber.left;
                         break;
                 }
 
                 let newRoom = new this.Carver(x, y, width, height, this);
-                newRoom.init();
                 newRoom.takenSide = takenSide; // the side that has a corridor connected to it
 
                 let skip = false;
@@ -280,25 +267,22 @@ exports.DGenerator = class {
                     }
                 }
 
-                if (skip) continue;
+                if (skip) {
+                    // remove the corridor from the connections because skipping this room will also skip the corridor
+                    const index = lastRoom.nexts.indexOf(corridor);
+                    if (index > -1) lastRoom.nexts.splice(index, 1);
+
+                    continue;
+                }
                 pendingRooms.push(newRoom); // adds the room into in the pending rooms array
+                corridor.nexts.push(newRoom); // adds this room into the corridor connections
+                
                 corridors.push(corridor); // pushes the current corridor
             }
             pendingCorridors = [];
             //#endregion
         }
 
-        //after looping, push all the pending corridors and rooms into the main arrays
-        if (pendingCorridors.length != 0) {
-            for (let i = 0, len = pendingCorridors.length; i < len; i++) {
-                corridors.push(pendingCorridors[i]);
-            }
-        }
-        if (pendingRooms.length != 0) {
-            for (let i = 0, len = pendingRooms.length; i < len; i++) {
-                rooms.push(pendingRooms[i]);
-            }
-        }
         // convert the rooms into numbers and fill it into this.dungeon
         for (let i = 0, len = rooms.length; i < len; i++) {
             // convert rooms
@@ -313,6 +297,21 @@ exports.DGenerator = class {
 
             room.construct(this.dungeon);
         }
+        
+        let counter = 0;
+        for(let i = 0, len = rooms.length; i < len; i++) {
+            let currRoom = rooms[i];
+
+            if (counter < this.settings.finishes) {
+                if (currRoom.nexts.length == 0) {
+                    this.dungeon[currRoom.center.y][currRoom.center.x] = this.cellValue.end;
+                    counter++;
+                }
+            } else {
+                break;
+            }
+        } 
+
         return this.dungeon; // return the dungeon
     }
 
